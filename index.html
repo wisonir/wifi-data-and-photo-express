@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiFi QR Share | Transfer Multiple Berkas, Foto & Dokumen Instan</title>
+  
+  <!-- Google Font & Favicon -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+
+    body { 
+      background: radial-gradient(circle at 50% 30%, #17387a 0%, #0d1e42 50%, #060d1d 100%);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Container Layar Splash */
+    .splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+    }
+
+    /* Logo Badge WiFi QR Share */
+    .brand-icon-wrapper {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6),
+                  0 0 25px rgba(37, 99, 235, 0.45);
+      margin-bottom: 1.5rem;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .brand-icon-wrapper svg {
+      width: 48px;
+      height: 48px;
+      fill: #ffffff;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+    }
+
+    /* Teks Judul & Subtitle */
+    .splash-title {
+      color: #ffffff;
+      font-size: 2.1rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: center;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+      line-height: 1.2;
+    }
+
+    .splash-title span {
+      color: #38bdf8;
+    }
+
+    .splash-sub {
+      color: #93c5fd;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-top: 0.4rem;
+      text-align: center;
+      max-width: 90vw;
+    }
+
+    /* Progress Loader Modern */
+    .loader-container {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 3.5px solid rgba(56, 189, 248, 0.2);
+      border-top-color: #38bdf8;
+      border-right-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.85s cubic-bezier(0.55, 0.25, 0.25, 0.7) infinite;
+    }
+
+    .loading-status {
+      font-size: 0.8rem;
+      color: #bfdbfe;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Animasi */
+    @keyframes spin { 
+      to { transform: rotate(360deg); } 
+    }
+
+    @keyframes float { 
+      0%, 100% { transform: translateY(0px); } 
+      50% { transform: translateY(-6px); } 
+    }
+
+    /* Tampilan Iframe */
+    iframe {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Layar Splash Screen -->
+  <div class="splash" id="splash">
+    <!-- Ikon Grid / QR Share -->
+    <div class="brand-icon-wrapper">
+      <svg viewBox="0 0 24 24">
+        <!-- Kotak modul 4 elemen (sesuai logo kotak WiFi QR Share) -->
+        <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+        <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+        <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+        <circle cx="16.75" cy="16.75" r="2.5" />
+      </svg>
+    </div>
+
+    <!-- Teks Branding -->
+    <h1 class="splash-title">WiFi QR <span>SHARE</span></h1>
+    <p class="splash-sub">Transfer Multiple Berkas, Foto & Dokumen Instan</p>
+
+    <!-- Loading Indicator -->
+    <div class="loader-container">
+      <div class="spinner"></div>
+      <span class="loading-status">Memuat Portal...</span>
+    </div>
+  </div>
+
+  <!-- Google Apps Script / App Iframe -->
+  <iframe
+    id="appFrame"
+    src="https://script.google.com/macros/s/AKfycbyhaPTu1kZ3ws0pLAE54KCJPCET93FBqz7ZtJkgTYS5AoHoOXWz8SuMvQ9FwNeiWSfmiw/exec"
+    allowfullscreen
+    onload="frameLoaded()">
+  </iframe>
+
+  <script>
+    function frameLoaded() {
+      const splash = document.getElementById("splash");
+      const appFrame = document.getElementById("appFrame");
+      
+      // Animasi Fade Out Halus
+      splash.style.opacity = "0";
+      setTimeout(() => {
+        splash.style.display = "none";
+        appFrame.style.display = "block";
+      }, 600);
+    }
+  </script>
+
+</body>
+</html>
