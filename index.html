@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiFi QR Share & Transfer PWA</title>
+  
+  <link rel="manifest" href='data:application/manifest+json;utf8,{"name":"WiFi QR Share & Transfer PWA","short_name":"QRShare","start_url":"./","display":"standalone","background_color":"#0f172a","theme_color":"#2563eb"}'>
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- External Styles & Icon Libraries -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Utility Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body class="h-full flex flex-col font-sans antialiased selection:bg-brand-500 selection:text-white relative">
+
+  <!-- NOTIFICATION CONTAINERS -->
+  <div id="toast-container" class="fixed top-5 right-5 z-[9999] flex flex-col space-y-3 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+  <div id="custom-dialog-backdrop" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="custom-dialog-card" class="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-modal-pop relative">
+      <div class="flex items-center justify-center">
+        <div id="dialog-icon-bg" class="w-14 h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 text-brand-400 flex items-center justify-center text-2xl shadow-lg">
+          <i id="dialog-icon-symbol" class="fa-solid fa-circle-info"></i>
+        </div>
+      </div>
+      <div class="text-center space-y-2">
+        <h3 id="dialog-title" class="text-lg font-extrabold text-white">Judul Informasi</h3>
+        <p id="dialog-text" class="text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto">Pesan deskripsi informasi singkat.</p>
+      </div>
+      <div id="dialog-input-wrapper" class="hidden space-y-1">
+        <label id="dialog-input-label" class="block text-xs font-semibold text-slate-300"></label>
+        <input type="text" id="dialog-input-element" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+      <div id="dialog-loading-spinner" class="hidden flex flex-col items-center justify-center space-y-3 py-3">
+        <div class="w-10 h-10 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin"></div>
+      </div>
+      <div id="dialog-actions-wrapper" class="flex items-center justify-end space-x-3 pt-2">
+        <button id="dialog-btn-cancel" class="hidden flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 transition-all">Batal</button>
+        <button id="dialog-btn-confirm" class="flex-1 py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl transition-all shadow-lg shadow-brand-600/30">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAVBAR -->
+  <header class="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/60 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/30">
+          <i class="fa-solid font-bold fa-qrcode text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg text-white leading-tight">WiFi QR Share</h1>
+          <p class="text-xs text-slate-400 hidden sm:block">Frontend GitHub Pages • Backend Google Sheets</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div id="active-room-badge" class="hidden items-center px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-xs font-medium text-emerald-400 animate-pulse">
+          <i class="fa-solid fa-signal mr-1.5 text-emerald-400"></i>
+          <span>Ruang: <strong id="badge-room-code" class="text-white">--</strong></span>
+        </div>
+
+        <div id="user-info-dropdown" onclick="handleAuthAction()" class="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 px-3 py-1.5 rounded-lg transition-all cursor-pointer">
+          <i class="fa-solid fa-circle-user text-slate-300 text-lg"></i>
+          <span id="nav-user-name" class="text-xs font-semibold text-slate-200">Tamu</span>
+          <div class="ml-2 text-slate-400 hover:text-rose-400 transition-colors">
+            <i id="auth-btn-icon" class="fa-solid fa-right-to-bracket text-sm"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- BODY CONTENT WRAPPER -->
+  <div class="flex-1 flex overflow-hidden max-w-7xl w-full mx-auto">
+    <!-- SIDEBAR DESKTOP -->
+    <aside class="hidden md:flex flex-col w-64 bg-slate-800/40 border-r border-slate-700/50 p-4 space-y-2">
+      <nav class="space-y-1 flex-1">
+        <button onclick="switchTab('dashboard')" id="nav-btn-dashboard" class="sidebar-nav-item active w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all bg-brand-600 text-white shadow-md shadow-brand-600/20">
+          <i class="fa-solid fa-house text-lg w-6"></i>
+          <span>Dashboard Utama</span>
+        </button>
+        <button onclick="switchTab('active-room')" id="nav-btn-active-room" class="sidebar-nav-item w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-folder-open text-lg w-6"></i>
+          <span>Ruang Berbagi Aktif</span>
+        </button>
+        <button onclick="switchTab('history')" id="nav-btn-history" class="sidebar-nav-item hidden w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-clock-rotate-left text-lg w-6"></i>
+          <span>Riwayat Transfer Saya</span>
+        </button>
+        <button onclick="switchTab('admin')" id="nav-btn-admin" class="sidebar-nav-item hidden w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-user-shield text-lg w-6"></i>
+          <span>Panel Admin</span>
+        </button>
+      </nav>
+
+      <div class="p-3 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs text-slate-400 space-y-1">
+        <div class="flex items-center justify-between">
+          <span>Database:</span>
+          <span class="text-emerald-400 font-semibold">Google Sheets</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>File Storage:</span>
+          <span class="text-brand-400 font-semibold">Google Drive</span>
+        </div>
+        <div class="pt-1 border-t border-slate-700/60 text-[10px] text-slate-500 text-center">
+          <span>Created by</span>
+          <a href="https://instagram.com/wisonir" target="_blank" class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium text-brand-400 bg-brand-500/10 hover:bg-brand-500/20 rounded">@wisonir</a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEWS -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <!-- VIEW 1: DASHBOARD -->
+      <section id="view-dashboard" class="space-y-6">
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-indigo-700 p-6 sm:p-8 shadow-xl">
+          <div class="relative z-10 space-y-2 max-w-2xl">
+            <span class="px-3 py-1 rounded-full bg-white/10 text-white/90 text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
+              ⚡ GitHub Pages Client • GAS Cloud Storage Engine
+            </span>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white">Bagikan & Kelola Berkas, Foto & Dokumen Instan</h2>
+            <p class="text-slate-200 text-sm leading-relaxed">
+              Daftar akun User untuk mengelola file Anda, buat ruang transfer terlindungi PIN, dan scan QR Code langsung dari browser.
+            </p>
+          </div>
+          <div class="absolute -right-10 -bottom-10 opacity-15 text-white pointer-events-none">
+            <i class="fa-solid fa-wifi text-[200px]"></i>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between hover:border-brand-500/50 transition-all shadow-lg">
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-plus font-bold"></i>
+              </div>
+              <h3 class="text-xl font-bold text-white">Buat Ruang Transfer Baru</h3>
+              <p class="text-xs text-slate-400">Generasi kode 6-digit dan QR Code lengkap dengan opsi proteksi PIN keamanan.</p>
+            </div>
+            <button onclick="createNewRoom()" class="mt-6 w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-qrcode"></i>
+              <span>Buat Ruangan Sekarang</span>
+            </button>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between hover:border-cyan-500/50 transition-all shadow-lg">
+            <div class="space-y-4">
+              <div class="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-camera"></i>
+              </div>
+              <h3 class="text-xl font-bold text-white">Pindai QR Code Kamera</h3>
+              <p class="text-xs text-slate-400">Gunakan kamera perangkat untuk memindai QR Code secara instan.</p>
+            </div>
+            <div class="mt-6 flex space-x-2">
+              <button onclick="openQRScannerModal()" class="flex-1 py-3 px-4 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-cyan-600/30 flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-expand"></i>
+                <span>Buka Kamera Scan</span>
+              </button>
+              <button onclick="promptManualRoomCode()" class="py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-sm rounded-xl transition-all border border-slate-600" title="Input Kode Manual">
+                <i class="fa-solid fa-keyboard"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: ACTIVE ROOM -->
+      <section id="view-active-room" class="hidden space-y-6">
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg">
+          <div class="space-y-2 text-center md:text-left">
+            <div class="flex items-center justify-center md:justify-start space-x-2">
+              <span class="px-3 py-1 bg-brand-500/20 text-brand-400 border border-brand-500/30 rounded-full text-xs font-bold uppercase tracking-wider">Ruang Aktif</span>
+              <span id="pin-protected-badge" class="hidden px-2.5 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full text-[10px] font-bold">
+                <i class="fa-solid fa-lock mr-1"></i>PIN Aktif
+              </span>
+            </div>
+            <h2 class="text-3xl font-black text-white tracking-wider" id="room-display-code">------</h2>
+            <p class="text-xs text-slate-400">Perangkat di jaringan yang sama dapat scan QR ini untuk bergabung</p>
+          </div>
+
+          <div class="p-3 bg-white rounded-xl shadow-xl flex flex-col items-center justify-center space-y-2">
+            <div id="qrcode-canvas" class="w-36 h-36 flex items-center justify-center"></div>
+            <span class="text-[10px] text-slate-600 font-bold">SCAN DENGAN KAMERA</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-6 shadow-lg">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-4 flex-wrap gap-3">
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white">Panel Unggah Konten</h3>
+                <p class="text-xs text-slate-400">Unggah berkas atau bagikan teks/tautan langsung ke room ini</p>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+              <label for="retention-select" class="text-xs font-medium text-slate-300 hidden sm:inline">Masa Berlaku:</label>
+              <select id="retention-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="BURN">🔥 Burn After Read (Hapus Setelah Diunduh)</option>
+                <option value="24H" selected>⏱️ 24 Jam</option>
+                <option value="7D">📅 7 Hari</option>
+                <option value="30D">🗓️ 30 Hari</option>
+                <option value="NEVER">♾️ Permanen</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex rounded-xl bg-slate-900 border border-slate-700 p-1.5 space-x-1">
+            <button onclick="switchUploadTab('file')" id="upload-tab-btn-file" class="flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-2 bg-brand-600 text-white shadow-md">
+              <i class="fa-solid fa-file-arrow-up"></i>
+              <span>Upload Foto & Dokumen</span>
+            </button>
+            <button onclick="switchUploadTab('text')" id="upload-tab-btn-text" class="flex-1 py-2.5 px-4 rounded-lg text-xs font-semibold transition-all flex items-center justify-center space-x-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+              <i class="fa-solid fa-comment-sms"></i>
+              <span>Kirim Pesan Teks</span>
+            </button>
+          </div>
+
+          <div id="upload-content-file" class="space-y-4">
+            <div id="drop-zone" onclick="document.getElementById('file-input').click()" class="border-2 border-dashed border-slate-600 hover:border-brand-500 bg-slate-900/40 hover:bg-slate-900/80 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-3 group">
+              <input type="file" id="file-input" class="hidden" multiple onchange="handleFileSelect(event)">
+              <div class="w-14 h-14 mx-auto rounded-full bg-slate-800 group-hover:scale-110 group-hover:bg-brand-600/20 group-hover:text-brand-400 text-slate-400 flex items-center justify-center text-xl transition-all">
+                <i class="fa-solid fa-folder-plus"></i>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-200 group-hover:text-brand-400 transition-colors">Klik atau Seret Berkas ke Area Ini</p>
+                <p class="text-xs text-slate-500 mt-1">Mendukung Multiple Upload: JPG, PNG, MP4, PDF, Docx, Xlsx, Zip</p>
+              </div>
+            </div>
+
+            <div id="file-preview-info" class="hidden text-xs text-brand-400 font-semibold bg-brand-500/10 py-1.5 px-4 rounded-full inline-block border border-brand-500/20 shadow-md"></div>
+            <div id="file-preview-container" class="hidden space-y-3 pt-2"></div>
+
+            <button id="btn-submit-multiple" onclick="confirmAndUploadMultipleFiles()" class="hidden w-full py-3.5 px-4 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-brand-600/30 items-center justify-center space-x-2">
+              <i class="fa-solid fa-paper-plane text-sm"></i>
+              <span>Kirim Seluruh Berkas ke Ruangan</span>
+            </button>
+          </div>
+
+          <div id="upload-content-text" class="hidden space-y-3">
+            <div class="space-y-1.5 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+              <label class="block text-xs font-semibold text-slate-300">Tulis Catatan / Tautan:</label>
+              <textarea id="text-share-input" rows="4" placeholder="Tulis catatan atau URL di sini..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"></textarea>
+            </div>
+            <button onclick="uploadTextContent()" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl transition-all shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Kirim Pesan ke Ruangan</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-4 shadow-lg">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-3 flex-wrap gap-2">
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-folder-tree text-brand-400"></i>
+              <span>Berkas di Ruangan Ini</span>
+            </h3>
+            
+            <div class="flex items-center space-x-2">
+              <button onclick="executeDownloadAllZip()" class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all flex items-center space-x-1.5 font-semibold shadow-md">
+                <i class="fa-solid fa-file-zipper"></i>
+                <span>Unduh Semua (.ZIP)</span>
+              </button>
+              
+              <button onclick="loadRoomFiles()" class="text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-all flex items-center space-x-1">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Muat Ulang</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-center gap-3 pt-1">
+            <div class="relative flex-1 w-full">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+              <input type="text" id="room-files-search" oninput="filterRoomFilesList()" placeholder="Cari berkas..." class="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 text-xs rounded-xl text-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            </div>
+            <div class="w-full sm:w-56">
+              <select id="room-files-type-filter" onchange="filterRoomFilesList()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="ALL">📂 Semua Jenis</option>
+                <option value="image">🖼️ Gambar / Foto</option>
+                <option value="video">🎬 Video</option>
+                <option value="pdf">📄 PDF</option>
+                <option value="word">📝 Word</option>
+                <option value="excel">📊 Excel</option>
+                <option value="text">💬 Pesan Teks</option>
+                <option value="zip">📦 Arsip ZIP</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="room-files-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            <div class="col-span-full text-center py-12 text-slate-500">
+              <i class="fa-solid fa-box-open text-4xl mb-2"></i>
+              <p class="text-sm">Belum ada berkas terbagikan di ruangan ini.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: TRANSFER HISTORY -->
+      <section id="view-history" class="hidden space-y-6">
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-4 shadow-lg">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-700/60 pb-4">
+            <div>
+              <h2 class="text-xl font-bold text-white">Riwayat Transfer Berkas Saya</h2>
+              <p class="text-xs text-slate-400" id="history-view-subtitle">Log data berkas akun Anda</p>
+            </div>
+            <button onclick="loadTransferHistory()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-center gap-3 pt-1">
+            <div class="relative flex-1 w-full">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+              <input type="text" id="history-search" oninput="filterHistoryTable()" placeholder="Cari riwayat..." class="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 text-xs rounded-xl text-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            </div>
+            <div class="w-full sm:w-56">
+              <select id="history-type-filter" onchange="filterHistoryTable()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="ALL">📂 Semua Jenis</option>
+                <option value="image">🖼️ Gambar / Foto</option>
+                <option value="video">🎬 Video</option>
+                <option value="pdf">📄 PDF</option>
+                <option value="word">📝 Word</option>
+                <option value="excel">📊 Excel</option>
+                <option value="text">💬 Pesan Teks</option>
+                <option value="zip">📦 Arsip ZIP</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto pt-2">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/60 uppercase text-slate-400 font-semibold border-b border-slate-700/60">
+                <tr>
+                  <th class="p-3">Waktu</th>
+                  <th class="p-3">Kode Ruang</th>
+                  <th class="p-3">Nama Berkas & Keterangan</th>
+                  <th class="p-3">Ukuran</th>
+                  <th class="p-3">Retensi</th>
+                  <th class="p-3 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body" class="divide-y divide-slate-700/40">
+                <tr>
+                  <td colspan="6" class="p-6 text-center text-slate-500">Memuat riwayat...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: ADMIN PANEL -->
+      <section id="view-admin" class="hidden space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Transaksi</span>
+              <button onclick="loadAdminStats()" class="text-xs text-brand-400 hover:text-brand-300"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+            <h3 class="text-3xl font-extrabold text-white" id="admin-stat-total-files">0</h3>
+            <p class="text-[11px] text-slate-500">Tercatat di Google Sheets</p>
+          </div>
+          
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-2">
+            <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Status Pembersihan</span>
+            <h3 class="text-xl font-bold text-emerald-400" id="admin-stat-clean-status">Auto Active</h3>
+            <p class="text-[11px] text-slate-500">Google Time-Driven Trigger</p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-2 flex flex-col justify-between">
+            <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Pembersihan Manual</span>
+            <button onclick="runManualAutoCleanup()" class="w-full py-2 px-3 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-semibold transition-all">
+              <i class="fa-solid fa-trash-can mr-1"></i> Jalankan Pembersihan
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-4 shadow-lg">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-hard-drive text-brand-400"></i>
+              <span>Kapasitas Penyimpanan Drive</span>
+            </h3>
+            <span id="storage-percent-label" class="text-xs font-mono font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-full border border-brand-500/20">0% Terpakai</span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="w-full h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-700 p-0.5">
+              <div id="storage-gauge-bar" class="h-full bg-gradient-to-r from-brand-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+              <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="block text-[10px] text-slate-400 uppercase font-bold">Terpakai</span>
+                <strong id="storage-used-label" class="text-slate-200">0 MB</strong>
+              </div>
+              <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="block text-[10px] text-slate-400 uppercase font-bold">Tersedia</span>
+                <strong id="storage-free-label" class="text-emerald-400">0 GB</strong>
+              </div>
+              <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="block text-[10px] text-slate-400 uppercase font-bold">Total Kuota</span>
+                <strong id="storage-limit-label" class="text-slate-300">0 GB</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MANAGE PENGGUNA -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-4 shadow-lg">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-4">
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                <i class="fa-solid fa-users-gear text-brand-400"></i>
+                <span>Kelola Pengguna (Admin CRUD)</span>
+              </h3>
+              <p class="text-xs text-slate-400">Kelola akun pengguna, role, dan status aktif.</p>
+            </div>
+            <button onclick="openUserModalForAdd()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center space-x-2">
+              <i class="fa-solid fa-user-plus"></i>
+              <span>Tambah User</span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3 pt-1">
+            <div class="relative flex-1 w-full">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+              <input type="text" id="admin-users-search" oninput="filterAdminUsersTable()" placeholder="Cari username atau nama..." class="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 text-xs rounded-xl text-slate-200 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            </div>
+            <button onclick="loadAdminUsersList()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-xl transition-all">
+              <i class="fa-solid fa-rotate"></i>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto pt-2">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/60 uppercase text-slate-400 font-semibold border-b border-slate-700/60">
+                <tr>
+                  <th class="p-3">ID & Nama Lengkap</th>
+                  <th class="p-3">Username</th>
+                  <th class="p-3">Role</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Dibuat</th>
+                  <th class="p-3 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-table-body" class="divide-y divide-slate-700/40">
+                <tr>
+                  <td colspan="6" class="p-6 text-center text-slate-500">Memuat pengguna...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 space-y-4 shadow-lg">
+          <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-database text-brand-400"></i>
+            <span>Inisialisasi Database Google Sheets</span>
+          </h3>
+          <p class="text-xs text-slate-400">Buat atau perbarui sheet Users, Device_Rooms, dan Transfer_Logs.</p>
+          <div>
+            <button onclick="executeDatabaseSetup()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl shadow-md">
+              <i class="fa-solid fa-gears mr-1.5"></i> Inisialisasi Sheet Sekarang
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- BOTTOM NAV (MOBILE) -->
+  <nav class="md:hidden bg-slate-800/90 backdrop-blur-lg border-t border-slate-700/60 fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around h-16 px-2">
+    <button onclick="switchTab('dashboard')" id="mobile-btn-dashboard" class="mobile-nav-item active flex flex-col items-center justify-center w-full h-full text-brand-400">
+      <i class="fa-solid fa-house text-lg"></i>
+      <span class="text-[10px] font-medium mt-1">Utama</span>
+    </button>
+    <button onclick="switchTab('active-room')" id="mobile-btn-active-room" class="mobile-nav-item flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-folder-open text-lg"></i>
+      <span class="text-[10px] font-medium mt-1">Ruang</span>
+    </button>
+    <button onclick="switchTab('history')" id="mobile-btn-history" class="mobile-nav-item hidden flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+      <span class="text-[10px] font-medium mt-1">Riwayat</span>
+    </button>
+    <button onclick="switchTab('admin')" id="mobile-btn-admin" class="mobile-nav-item hidden flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-user-shield text-lg"></i>
+      <span class="text-[10px] font-medium mt-1">Admin</span>
+    </button>
+  </nav>
+
+  <!-- MODALS -->
+  <!-- MODAL ADMIN USER -->
+  <div id="modal-admin-user" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl relative animate-modal-pop">
+      <button onclick="closeAdminUserModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 mx-auto flex items-center justify-center text-xl">
+          <i id="admin-user-modal-icon" class="fa-solid fa-user-plus"></i>
+        </div>
+        <h3 id="admin-user-modal-title" class="text-xl font-bold text-white">Tambah Pengguna Baru</h3>
+      </div>
+      <form id="form-admin-user-element" onsubmit="submitAdminUserForm(event)" class="space-y-4">
+        <input type="hidden" id="admin-user-edit-id">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nama Lengkap</label>
+          <input type="text" id="admin-user-fullname" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+          <input type="text" id="admin-user-username" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label id="admin-password-label" class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+          <input type="password" id="admin-user-password" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <span id="admin-password-hint" class="text-[10px] text-slate-500 hidden">Kosongkan jika tidak ingin mengubah password saat edit.</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+            <select id="admin-user-role" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="User">User</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Status</label>
+            <select id="admin-user-status" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="true">Aktif</option>
+              <option value="false">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex space-x-3 pt-2">
+          <button type="button" onclick="closeAdminUserModal()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs rounded-xl">Batal</button>
+          <button type="submit" id="btn-admin-user-save" class="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl shadow-lg">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL LOGIN/REGISTER -->
+  <div id="modal-login" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl relative">
+      <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="text-center space-y-2">
+        <div class="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 mx-auto flex items-center justify-center text-xl">
+          <i class="fa-solid fa-lock"></i>
+        </div>
+        <h3 id="auth-modal-title" class="text-xl font-bold text-white">Login Pengguna</h3>
+        <p id="auth-modal-subtitle" class="text-xs text-slate-400">Masuk untuk mengelola data pribadi Anda</p>
+      </div>
+
+      <form id="form-login-element" onsubmit="submitLoginForm(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+          <input type="text" id="login-username" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+          <input type="password" id="login-password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <button type="submit" id="btn-login-submit" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl shadow-lg">Masuk Sekarang</button>
+        <div class="text-center pt-2">
+          <button type="button" onclick="toggleAuthMode('register')" class="text-xs text-brand-400 hover:underline">Belum punya akun? <strong>Daftar Akun Baru</strong></button>
+        </div>
+      </form>
+
+      <form id="form-register-element" onsubmit="submitRegisterForm(event)" class="space-y-4 hidden">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nama Lengkap</label>
+          <input type="text" id="register-fullname" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+          <input type="text" id="register-username" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+          <input type="password" id="register-password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <button type="submit" id="btn-register-submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-lg">Daftar Akun Baru</button>
+        <div class="text-center pt-2">
+          <button type="button" onclick="toggleAuthMode('login')" class="text-xs text-slate-400 hover:underline">Sudah punya akun? <strong>Masuk di sini</strong></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL QR SCANNER -->
+  <div id="modal-qr-scanner" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative">
+      <button onclick="closeQRScannerModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      <div class="text-center space-y-1">
+        <h3 class="text-lg font-bold text-white">Pindai QR Code Ruangan</h3>
+        <p class="text-xs text-slate-400">Arahkan kamera ke QR Code ruangan tujuan</p>
+      </div>
+      <div class="overflow-hidden rounded-xl bg-slate-950 border border-slate-700 relative min-h-[260px] flex items-center justify-center">
+        <div id="qr-reader-view" class="w-full"></div>
+      </div>
+      <button onclick="closeQRScannerModal()" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl">Batal</button>
+    </div>
+  </div>
+
+  <!-- MODAL PREVIEW -->
+  <div id="modal-preview" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="preview-modal-card" class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl relative transition-all duration-300">
+      <div class="p-4 bg-slate-900 border-b border-slate-700 flex items-center justify-between">
+        <div class="flex items-center space-x-3 overflow-hidden">
+          <div id="preview-icon-type" class="w-9 h-9 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0 text-lg">
+            <i class="fa-solid fa-image"></i>
+          </div>
+          <div class="overflow-hidden">
+            <h3 id="preview-file-title" class="text-sm font-bold text-white truncate">Nama Berkas</h3>
+            <p id="preview-file-subtitle" class="text-[11px] text-slate-400">Detail Berkas</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="togglePreviewFullScreen()" id="btn-preview-fullscreen" title="Layar Penuh" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center">
+            <i id="fullscreen-icon" class="fa-solid fa-expand text-sm"></i>
+          </button>
+          <button onclick="closePreviewModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 flex flex-col items-center justify-center min-h-[350px] relative space-y-4">
+        <div id="preview-image-container" class="hidden w-full flex flex-col items-center justify-center space-y-3">
+          <div class="flex items-center space-x-2 bg-slate-900/90 border border-slate-700 px-4 py-2 rounded-xl text-xs z-10">
+            <button onclick="zoomOutImage()" class="p-1.5 hover:bg-slate-800 rounded text-slate-300"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            <span id="zoom-percentage-badge" class="font-mono text-brand-400 font-bold px-2">100%</span>
+            <button onclick="zoomInImage()" class="p-1.5 hover:bg-slate-800 rounded text-slate-300"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+            <div class="h-4 w-px bg-slate-700 mx-1"></div>
+            <button onclick="rotateImage()" class="p-1.5 hover:bg-slate-800 rounded text-slate-300"><i class="fa-solid fa-rotate-right"></i></button>
+            <button onclick="resetImageZoom()" class="p-1.5 hover:bg-slate-800 rounded text-rose-400"><i class="fa-solid fa-arrows-to-dot"></i></button>
+          </div>
+          <div id="preview-img-viewport" class="relative w-full max-h-[48vh] overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-center p-2 cursor-grab select-none">
+            <img id="preview-img-element" src="" alt="Pratinjau Gambar" class="max-h-[40vh] object-contain rounded-lg">
+          </div>
+        </div>
+
+        <div id="preview-doc-container" class="hidden w-full h-[52vh] flex flex-col space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+            <span>Pembaca Dokumen Google</span>
+            <a id="btn-open-doc-external" href="#" target="_blank" class="text-brand-400 hover:underline">Tab Baru <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>
+          </div>
+          <iframe id="preview-doc-iframe" src="" class="w-full flex-1 rounded-xl border border-slate-800 bg-slate-900"></iframe>
+        </div>
+
+        <div id="preview-video-container" class="hidden w-full flex flex-col items-center justify-center space-y-3">
+          <div class="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-800 bg-black flex items-center justify-center">
+            <iframe id="preview-video-iframe" src="" class="w-full h-full border-0" allow="autoplay" allowfullscreen></iframe>
+          </div>
+        </div>
+
+        <div id="preview-text-container" class="hidden w-full space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+            <span>Isi Teks / Pesan:</span>
+            <button onclick="copyTextPreview()" class="text-brand-400 hover:underline flex items-center space-x-1"><i class="fa-solid fa-copy"></i><span>Salin Teks</span></button>
+          </div>
+          <pre id="preview-text-element" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 text-xs font-mono whitespace-pre-wrap break-words max-h-[40vh] overflow-y-auto"></pre>
+        </div>
+
+        <div id="preview-generic-container" class="hidden text-center py-8 space-y-4">
+          <div class="w-20 h-20 rounded-2xl bg-slate-800 border border-slate-700 text-slate-400 mx-auto flex items-center justify-center text-3xl"><i id="preview-generic-icon" class="fa-solid fa-file text-indigo-400"></i></div>
+          <h4 class="text-sm font-bold text-white">Pratinjau Langsung Tidak Didukung</h4>
+        </div>
+
+        <div id="preview-description-box" class="hidden w-full bg-slate-900/90 border border-brand-500/30 rounded-xl p-3 text-xs text-slate-200 space-y-2">
+          <div class="flex items-center justify-between text-brand-400 font-semibold">
+            <span>Keterangan Berkas:</span>
+            <button onclick="copyDescriptionPreview()" class="text-brand-400 hover:underline text-[11px]">Salin</button>
+          </div>
+          <p id="preview-description-text" class="text-slate-300 pl-2 whitespace-pre-wrap"></p>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-900 border-t border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="text-xs text-slate-400">
+          <div>Pengirim: <strong id="preview-info-sender" class="text-slate-200">--</strong></div>
+          <div>Retensi: <span id="preview-info-retention" class="text-brand-400 font-mono">--</span></div>
+        </div>
+        <div class="flex items-center space-x-2 w-full sm:w-auto">
+          <button id="btn-copy-link" onclick="copyPreviewDownloadLink()" class="flex-1 sm:flex-initial py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700">Salin Tautan</button>
+          <a id="btn-download-preview" href="#" onclick="handleDirectDownloadFromPreview(event)" class="flex-1 sm:flex-initial py-2 px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl">Unduh Berkas</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION SCRIPTS ORDER -->
+  <script src="config.js"></script>
+  <script src="gas-bridge.js"></script>
+  <script src="apps.js"></script>
+</body>
+</html>
